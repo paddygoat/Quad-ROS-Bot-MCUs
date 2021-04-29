@@ -8,6 +8,7 @@ std_msgs::Float32 ArduinoGPSx_msg;
 std_msgs::Float32 ArduinoGPSy_msg;
 std_msgs::Float32 act_steer_ang_msg;
 std_msgs::Float32 throttControl_msg;
+std_msgs::Float32 steerControl_msg;
 
 ros::Publisher pub_throttle("throttle", &throttle_msg);
 ros::Publisher pub_ArduinoGPSx("ArduinoGPSx", &ArduinoGPSx_msg);
@@ -45,9 +46,10 @@ int sensorValue_4 = 0;  // Not used
 int sensorValue_5 = 0;  // Actual mechanical steering angle
 
 int speed = 0;
+int ROSsteer = 0;
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-// Subscriber call back setup:
+// Subscriber call back setups:
 void messageCb1( const std_msgs::Float32 dogx1_msg )
 {
   ArduinoGPSx_msg = dogx1_msg;
@@ -64,11 +66,17 @@ ros::Subscriber<std_msgs::Float32> sub2("dogy1_msg", &messageCb2 );
 
 void messageCb3( const std_msgs::Float32 throttControl_msg )
 {
-  blinkLED_12();
+  // blinkLED_12();
   speed = (int)throttControl_msg.data;
 }
 ros::Subscriber<std_msgs::Float32> sub3("throttControl_msg", &messageCb3 );
 
+void messageCb4( const std_msgs::Float32 steerControl_msg )
+{
+  // blinkLED_12();
+  ROSsteer = (int)steerControl_msg.data;
+}
+ros::Subscriber<std_msgs::Float32> sub4("steerControl_msg", &messageCb4 );
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup()
@@ -79,14 +87,14 @@ void setup()
   nh.subscribe(sub1);
   nh.subscribe(sub2);
   nh.subscribe(sub3);
+  nh.subscribe(sub4);
 /////////////////////////////////////////////
 
   nh.advertise(pub_throttle);
   nh.advertise(pub_ArduinoGPSx);
   nh.advertise(pub_ArduinoGPSy);
   nh.advertise(pub_act_steer_ang);
-  
-  // Serial.begin(9600);
+
   pinMode(ledPin0, OUTPUT);
   pinMode(ledPin1, OUTPUT);
   pinMode(11, OUTPUT);        // THROTTLE PWM
@@ -113,18 +121,18 @@ void loop()
     sensorValue_4 = analogRead(sensorPin_4);  // Not used
     sensorValue_5 = analogRead(sensorPin_5);  // Actual steering angle. 575 to 408 to 276. Centre is 408.
 
-    // Serial.print("steerControlVal: ");Serial.println(steerControlVal);
-    // Serial.print("throttleVal: ");Serial.println(throttleVal);
-    // Serial.print("sensorValue_3: ");Serial.println(sensorValue_3);
-    // Serial.print("sensorValue_4: ");Serial.println(sensorValue_4);
-    // Serial.println("");
-
     // STEERING CONTROL IS ON ANALOG 1:
-    if ((steerControlVal > 300)&&(steerControlVal < 750)) // Deadspot between 300 and 750.
+    if ((steerControlVal > 300)&&(steerControlVal < 750)&& (ROSsteer < 1)) // Deadzone is set to between 300 and 750.
     {
       digitalWrite(49, LOW);
       delay(50);
       digitalWrite(51, LOW);    // Stop the actuator
+    }
+
+    if (ROSsteer > 0)   // If there's no ROSsteer data then ROSsteer = 0.
+    {
+      steerControlVal = ROSsteer;
+      blinkLED_12();
     }
 
     if (steerControlVal > 750)
@@ -153,7 +161,6 @@ void loop()
     }
 
     analogWrite(11, speed);
-    // Serial.print("speed: ");Serial.println(speed);
 
     throttle_msg.data = speed;
     act_steer_ang_msg.data = sensorValue_5;  // Actual mechanical steering angle
